@@ -19,7 +19,7 @@ type IUserRepository interface {
 }
 
 type UserRepository struct {
-	DBConn sql.DB
+	DBConn *sql.DB
 }
 
 func (repo UserRepository) AddUser(user models.User) (int, error) {

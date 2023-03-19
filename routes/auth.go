@@ -51,7 +51,7 @@ func login(c *gin.Context) {
 		return
 	}
 
-	repo := repositories.UserRepository{DBConn: *env.DB}
+	repo := repositories.UserRepository{DBConn: env.DB}
 	controller := controllers.UserController{UserRepository: repo}
 
 	user, err := controller.GetUserWithCredentials(requestBody.Email, requestBody.Password)
@@ -95,7 +95,7 @@ func register(c *gin.Context) {
 		return
 	}
 
-	repo := repositories.UserRepository{DBConn: *env.DB}
+	repo := repositories.UserRepository{DBConn: env.DB}
 	controller := controllers.UserController{UserRepository: repo}
 
 	_, err := controller.AddUser(user)
