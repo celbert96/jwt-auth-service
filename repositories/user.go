@@ -11,7 +11,7 @@ import (
 )
 
 type IUserRepository interface {
-	AddUser(models.User) (int, error)
+	AddUser(models.User) (models.User, error)
 	DeleteUser(int) error
 	GetUserByID(int) (models.User, error)
 	GetUserByEmail(string) (models.User, error)
@@ -22,7 +22,7 @@ type UserRepository struct {
 	DBConn *sql.DB
 }
 
-func (repo UserRepository) AddUser(user models.User) (int, error) {
+func (repo UserRepository) AddUser(user models.User) (models.User, error) {
 	dbConn := repo.DBConn
 
 	result, err := dbConn.Exec("INSERT INTO USERS (EMAIL, PASSWORD) VALUES (?, ?)",
@@ -32,17 +32,17 @@ func (repo UserRepository) AddUser(user models.User) (int, error) {
 		mysqlerr, _ := err.(*mysql.MySQLError)
 		if mysqlerr != nil {
 			if mysqlerr.Number == 1062 {
-				return 0, fmt.Errorf("user already exists")
+				return user, fmt.Errorf("user already exists")
 			}
 		}
 
 		log.Printf("repositories > user.go > AddUser > error: %s", err.Error())
-		return 0, err
+		return user, err
 	}
 
 	id, err := result.LastInsertId()
 	if err != nil {
-		return 0, err
+		return user, err
 	}
 
 	_, err = dbConn.Exec("INSERT INTO USER_ROLES (USER_ID, ROLE_ID) VALUES (?, ?)", id, models.USER_ROLE)
@@ -51,7 +51,10 @@ func (repo UserRepository) AddUser(user models.User) (int, error) {
 		log.Println("repositories > user.go > AddUser > error: %s" + err.Error())
 	}
 
-	return int(id), nil
+	user.ID = int(id)
+	user.UserRoles = []models.Roles{models.USER_ROLE}
+
+	return user, nil
 }
 
 func (repo UserRepository) GetUserByID(id int) (models.User, error) {

@@ -1,11 +1,14 @@
 package routes
 
 import (
+	"fmt"
 	"jwt-auth-service/controllers"
 	"jwt-auth-service/models"
 	"jwt-auth-service/repositories"
 	"log"
 	"net/http"
+	"net/mail"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -38,9 +41,9 @@ func login(c *gin.Context) {
 		c.IndentedJSON(http.StatusBadRequest, models.ErrResponseForHttpStatus(http.StatusBadRequest))
 		return
 	}
-	if !requestBody.validate() {
+	if errors := requestBody.validate(); errors != nil {
 		log.Printf("routes > auth.go > login > invalid request > validation failed")
-		c.IndentedJSON(http.StatusBadRequest, models.ErrResponseForHttpStatus(http.StatusBadRequest))
+		c.IndentedJSON(http.StatusBadRequest, models.ErrorResponse{ErrorMessage: "Validation errors occurred", Errors: errors})
 		return
 	}
 
@@ -98,14 +101,14 @@ func register(c *gin.Context) {
 	repo := repositories.UserRepository{DBConn: env.DB}
 	controller := controllers.UserController{UserRepository: repo}
 
-	_, err := controller.AddUser(user)
-	if err != nil {
-		c.IndentedJSON(http.StatusBadRequest, models.ErrorResponse{ErrorMessage: err.Error()})
+	addedUser, errResp := controller.AddUser(user)
+	if errResp.ErrorMessage != "" {
+		c.IndentedJSON(http.StatusBadRequest, errResp)
 		return
 	}
 
 	authTokenExpiration := time.Now().Add(time.Minute * 30)
-	authTokenString, err := models.MintToken(user.Email, user.UserRoles, authTokenExpiration)
+	authTokenString, err := models.MintToken(addedUser.Email, addedUser.UserRoles, authTokenExpiration)
 	if err != nil {
 		log.Printf("routes > auth.go > register > failed to mint auth token")
 		c.IndentedJSON(http.StatusInternalServerError, models.ErrorResponse{ErrorMessage: "Could not mint token"})
@@ -114,7 +117,7 @@ func register(c *gin.Context) {
 
 	authTokenDetails := models.ClientReadableToken{
 		ExpiresAt: authTokenExpiration.Unix(),
-		UserRoles: user.UserRoles,
+		UserRoles: addedUser.UserRoles,
 	}
 
 	c.IndentedJSON(http.StatusOK, loginresponse{
@@ -123,10 +126,23 @@ func register(c *gin.Context) {
 	})
 }
 
-func (body loginrequestbody) validate() bool {
-	if body.Email == "" || body.Password == "" {
-		return false
+func (body loginrequestbody) validate() []string {
+	var validationErrors []string
+	const missingRequiredFieldMsg = "missing required field: %s"
+
+	if body.Email == "" {
+		validationErrors = append(validationErrors, fmt.Sprintf(missingRequiredFieldMsg, "email"))
+	} else {
+		_, err := mail.ParseAddress(body.Email)
+		if err != nil {
+			errStr := strings.ReplaceAll(err.Error(), "mail: ", "")
+			validationErrors = append(validationErrors, fmt.Sprintf("invalid email: %s", errStr))
+		}
 	}
 
-	return true
+	if len(strings.Trim(body.Password, " ")) == 0 {
+		validationErrors = append(validationErrors, fmt.Sprintf(missingRequiredFieldMsg, "password"))
+	}
+
+	return validationErrors
 }

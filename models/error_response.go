@@ -6,7 +6,8 @@ import (
 )
 
 type ErrorResponse struct {
-	ErrorMessage string `json:"error_message"`
+	ErrorMessage string   `json:"error_message"`
+	Errors       []string `json:"errors,omitempty"`
 }
 
 func ErrResponseForHttpStatus(status int) ErrorResponse {

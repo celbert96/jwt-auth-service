@@ -1,8 +1,8 @@
 package models
 
 import (
-	"errors"
 	"fmt"
+	"net/mail"
 	"strings"
 )
 
@@ -13,25 +13,22 @@ type User struct {
 	UserRoles []Roles `json:"roles"`
 }
 
-func (u User) IsValid() error {
+func (u User) Validate() []string {
 	var validationErrors []string
-	const MISSING_REQUIRED_FIELD_MSG = "missing required field %s"
+	const missingRequiredFieldMsg = "missing required field %s"
 
 	if u.Email == "" {
-		validationErrors = append(validationErrors, fmt.Sprintf(MISSING_REQUIRED_FIELD_MSG, "username"))
+		validationErrors = append(validationErrors, fmt.Sprintf(missingRequiredFieldMsg, "email"))
+	} else {
+		_, err := mail.ParseAddress(u.Email)
+		if err != nil {
+			errStr := strings.ReplaceAll(err.Error(), "mail: ", "")
+			validationErrors = append(validationErrors, fmt.Sprintf("invalid email: %s", errStr))
+		}
 	}
 	if len(strings.Trim(u.Password, " ")) == 0 {
-		validationErrors = append(validationErrors, fmt.Sprintf(MISSING_REQUIRED_FIELD_MSG, "password"))
+		validationErrors = append(validationErrors, fmt.Sprintf(missingRequiredFieldMsg, "password"))
 	}
 
-	if len(validationErrors) > 0 {
-		for _, e := range validationErrors {
-			fmt.Println(e)
-		}
-
-		errorMessage := fmt.Sprintf("The following errors were encountered: %s", strings.Join(validationErrors, "; "))
-		return errors.New(errorMessage)
-	}
-
-	return nil
+	return validationErrors
 }

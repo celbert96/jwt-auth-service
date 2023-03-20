@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	"fmt"
 	"jwt-auth-service/models"
 	"jwt-auth-service/repositories"
 
@@ -20,17 +19,23 @@ func (uc UserController) GetUserByEmail(email string) (models.User, error) {
 	return uc.UserRepository.GetUserByEmail(email)
 }
 
-func (uc UserController) AddUser(user models.User) (int, error) {
-	if err := user.IsValid(); err != nil {
-		return 0, err
+func (uc UserController) AddUser(user models.User) (models.User, models.ErrorResponse) {
+	if errors := user.Validate(); errors != nil {
+		return user, models.ErrorResponse{ErrorMessage: "validation errors occurred", Errors: errors}
 	}
 	hashedPass, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.MinCost)
 	if err != nil {
-		return 0, fmt.Errorf("failed to encrypt password")
+		return user, models.ErrorResponse{ErrorMessage: "failed to encrypt password"}
 	}
 
 	user.Password = string(hashedPass)
-	return uc.UserRepository.AddUser(user)
+
+	addedUser, err := uc.UserRepository.AddUser(user)
+	if err != nil {
+		return addedUser, models.ErrorResponse{ErrorMessage: err.Error()}
+	}
+
+	return addedUser, models.ErrorResponse{}
 }
 
 func (uc UserController) GetUserWithCredentials(email string, password string) (models.User, error) {
