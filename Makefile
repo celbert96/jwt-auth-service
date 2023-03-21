@@ -1,3 +1,5 @@
+.PHONY: test clean
+
 build:
 	go build -o bin/main main.go
 
@@ -15,6 +17,9 @@ tidy:
 
 clean: tidy
 	rm -rf bin
+
+test:
+	go test -v ./test/...
 
 dist:
 	echo "Compiling for other platforms"
