@@ -45,14 +45,14 @@ func (repo UserRepository) AddUser(user models.User) (models.User, error) {
 		return user, err
 	}
 
-	_, err = dbConn.Exec("INSERT INTO USER_ROLES (USER_ID, ROLE_ID) VALUES (?, ?)", id, models.USER_ROLE)
+	_, err = dbConn.Exec("INSERT INTO USER_ROLES (USER_ID, ROLE_ID) VALUES (?, ?)", id, models.UserRole)
 
 	if err != nil {
 		log.Println("repositories > user.go > AddUser > error: %s" + err.Error())
 	}
 
 	user.ID = int(id)
-	user.UserRoles = []models.Roles{models.USER_ROLE}
+	user.UserRoles = []models.Roles{models.UserRole}
 
 	return user, nil
 }

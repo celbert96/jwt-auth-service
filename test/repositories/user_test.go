@@ -39,7 +39,7 @@ var testUserData = map[int]models.User{
 
 var testExistingUser = testUserData[1]
 var testNewUserId = 4
-var testUserRoles = []models.Roles{models.USER_ROLE}
+var testUserRoles = []models.Roles{models.UserRole}
 
 func (repo MockUserRepository) AddUser(user models.User) (models.User, error) {
 	copyData := copyTestUserData(testUserData)
