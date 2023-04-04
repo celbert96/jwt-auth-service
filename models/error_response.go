@@ -14,6 +14,8 @@ func ErrResponseForHttpStatus(status int) ErrorResponse {
 	switch status {
 	case http.StatusForbidden:
 		return ErrorResponse{ErrorMessage: "access denied"}
+	case http.StatusUnauthorized:
+		return ErrorResponse{ErrorMessage: "unauthorized"}
 	case http.StatusNotFound:
 		return ErrorResponse{ErrorMessage: "resource not found"}
 	case http.StatusBadRequest:

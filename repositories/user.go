@@ -16,6 +16,8 @@ type IUserRepository interface {
 	GetUserByID(int) (models.User, error)
 	GetUserByEmail(string) (models.User, error)
 	GetUserWithCredentials(string, string) (models.User, error)
+	UpdateRefreshToken(int, string) error
+	GetRefreshToken(int) (string, error)
 }
 
 type UserRepository struct {
@@ -47,6 +49,11 @@ func (repo UserRepository) AddUser(user models.User) (models.User, error) {
 
 	_, err = dbConn.Exec("INSERT INTO USER_ROLES (USER_ID, ROLE_ID) VALUES (?, ?)", id, models.UserRole)
 
+	if err != nil {
+		log.Println("repositories > user.go > AddUser > error: %s" + err.Error())
+	}
+
+	_, err = dbConn.Exec("INSERT INTO REFRESH_TOKENS (USER_ID) VALUES (?)", id)
 	if err != nil {
 		log.Println("repositories > user.go > AddUser > error: %s" + err.Error())
 	}
@@ -180,4 +187,44 @@ func (repo UserRepository) DeleteUser(id int) error {
 	}
 
 	return err
+}
+
+func (repo UserRepository) UpdateRefreshToken(userId int, refreshToken string) error {
+	dbConn := repo.DBConn
+	_, err := dbConn.Exec("UPDATE REFRESH_TOKENS SET REFRESH_TOKEN = ? WHERE USER_ID = ?", refreshToken, userId)
+	if err != nil {
+		log.Printf("repositories > user.go > UpdateRefreshToken > error updating refresh token for user ID %d: %s\n", userId, err.Error())
+		return err
+	}
+
+	return nil
+}
+
+func (repo UserRepository) GetRefreshToken(userId int) (string, error) {
+	dbConn := repo.DBConn
+	rows, err := dbConn.Query("SELECT REFRESH_TOKEN FROM REFRESH_TOKENS WHERE USER_ID = ?", userId)
+	if err != nil {
+		log.Printf("repositories > user.go > UpdateRefreshToken > error updating refresh token for user ID %d: %s\n", userId, err.Error())
+		return "", err
+	}
+
+	defer func(rows *sql.Rows) {
+		err := rows.Close()
+		if err != nil {
+			log.Printf("repositories > user.go > UpdateRefreshToken > error closing database rows")
+		}
+	}(rows)
+
+	var refreshToken string
+	for rows.Next() {
+		err = rows.Scan(&refreshToken)
+		if err != nil {
+			log.Printf("repositories > user.go > GetRefreshToken > an error occurred when scanning db rows: %s\n", err.Error())
+			return "", fmt.Errorf("an unexpected error occurred")
+		}
+
+		return refreshToken, err
+	}
+
+	return refreshToken, err
 }

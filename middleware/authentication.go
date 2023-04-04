@@ -17,7 +17,7 @@ func CookieTokenAuth() gin.HandlerFunc {
 			return
 		}
 
-		_, err = models.ValidateToken(authTokenStr)
+		_, _, err = models.ValidateToken(authTokenStr)
 
 		if err != nil {
 			c.IndentedJSON(http.StatusForbidden, models.ErrResponseForHttpStatus(http.StatusForbidden))
@@ -38,7 +38,7 @@ func BearerTokenAuth() gin.HandlerFunc {
 			return
 		}
 
-		_, err = models.ValidateToken(authTokenStr)
+		_, _, err = models.ValidateToken(authTokenStr)
 
 		if err != nil {
 			c.IndentedJSON(http.StatusForbidden, models.ErrResponseForHttpStatus(http.StatusForbidden))

@@ -2,6 +2,7 @@ package models
 
 import (
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/golang-jwt/jwt/v4"
@@ -13,14 +14,14 @@ type ClientReadableToken struct {
 }
 type TokenClaims struct {
 	jwt.RegisteredClaims
-	UserRoles []Roles
+	UserRoles []Roles `json:"roles"`
 }
 
-func MintToken(userid string, userroles []Roles, expires time.Time) (string, error) {
+func MintToken(userid int, userroles []Roles, expires time.Time) (string, error) {
 	claims := TokenClaims{
 		jwt.RegisteredClaims{
 			Issuer:    "jwt-auth-service",
-			Subject:   userid,
+			Subject:   strconv.Itoa(userid),
 			ExpiresAt: jwt.NewNumericDate(expires),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},
@@ -39,9 +40,11 @@ func MintToken(userid string, userroles []Roles, expires time.Time) (string, err
 
 }
 
-func ValidateToken(tokenStr string) (*jwt.Token, error) {
+func ValidateToken(tokenStr string) (*jwt.Token, TokenClaims, error) {
 	claims := TokenClaims{}
-	return jwt.ParseWithClaims(tokenStr, &claims, func(token *jwt.Token) (interface{}, error) {
+	token, err := jwt.ParseWithClaims(tokenStr, &claims, func(token *jwt.Token) (interface{}, error) {
 		return []byte(os.Getenv("JWT_AUTH_SERVICE_SECRET_KEY")), nil
 	})
+
+	return token, claims, err
 }

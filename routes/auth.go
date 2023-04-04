@@ -5,9 +5,11 @@ import (
 	"jwt-auth-service/controllers"
 	"jwt-auth-service/models"
 	"jwt-auth-service/repositories"
+	"jwt-auth-service/utils"
 	"log"
 	"net/http"
 	"net/mail"
+	"strconv"
 	"strings"
 	"time"
 
@@ -29,6 +31,7 @@ func AddAuthRoutes(rg *gin.RouterGroup) {
 
 	authGroup.POST("/login", login)
 	authGroup.POST("/register", register)
+	authGroup.POST("/refreshtoken", refreshAuthToken)
 }
 
 // auth/login
@@ -64,10 +67,19 @@ func login(c *gin.Context) {
 	}
 
 	authTokenExpiration := time.Now().Add(time.Minute * 30)
-	authTokenString, err := models.MintToken(requestBody.Email, user.UserRoles, authTokenExpiration)
+	authTokenString, err := models.MintToken(user.ID, user.UserRoles, authTokenExpiration)
 	if err != nil {
 		log.Printf("routes > auth.go > getAuthToken > failed to mint auth token")
 		c.IndentedJSON(http.StatusInternalServerError, models.ErrorResponse{ErrorMessage: "Could not mint token"})
+		return
+	}
+
+	refreshTokenExpiration := time.Now().Add(time.Hour * 168) // 1 week
+	refreshTokenString, err := models.MintToken(user.ID, user.UserRoles, refreshTokenExpiration)
+	err = repo.UpdateRefreshToken(user.ID, refreshTokenString)
+	if err != nil {
+		log.Printf("routes > auth.go > register > failed to update refresh token")
+		c.IndentedJSON(http.StatusInternalServerError, models.ErrResponseForHttpStatus(http.StatusInternalServerError))
 		return
 	}
 
@@ -108,10 +120,25 @@ func register(c *gin.Context) {
 	}
 
 	authTokenExpiration := time.Now().Add(time.Minute * 30)
-	authTokenString, err := models.MintToken(addedUser.Email, addedUser.UserRoles, authTokenExpiration)
+	authTokenString, err := models.MintToken(addedUser.ID, addedUser.UserRoles, authTokenExpiration)
 	if err != nil {
 		log.Printf("routes > auth.go > register > failed to mint auth token")
 		c.IndentedJSON(http.StatusInternalServerError, models.ErrorResponse{ErrorMessage: "Could not mint token"})
+		return
+	}
+
+	refreshTokenExpiration := time.Now().Add(time.Hour * 168) // 1 week
+	refreshTokenString, err := models.MintToken(addedUser.ID, addedUser.UserRoles, refreshTokenExpiration)
+	if err != nil {
+		log.Printf("routes > auth.go > register > failed to mint refresh token")
+		c.IndentedJSON(http.StatusInternalServerError, models.ErrorResponse{ErrorMessage: "Could not mint token"})
+		return
+	}
+
+	err = repo.UpdateRefreshToken(addedUser.ID, refreshTokenString)
+	if err != nil {
+		log.Printf("routes > auth.go > register > failed to update refresh token")
+		c.IndentedJSON(http.StatusInternalServerError, models.ErrResponseForHttpStatus(http.StatusInternalServerError))
 		return
 	}
 
@@ -122,6 +149,70 @@ func register(c *gin.Context) {
 
 	c.IndentedJSON(http.StatusOK, loginresponse{
 		AuthToken:        authTokenString,
+		AuthTokenDetails: authTokenDetails,
+	})
+}
+
+func refreshAuthToken(c *gin.Context) {
+	env, ok := c.MustGet("env").(models.Env)
+	if !ok {
+		log.Println("routes > auth.go > refreshAuthToken > env not accessible")
+		c.IndentedJSON(http.StatusInternalServerError, models.ErrResponseForHttpStatus(http.StatusInternalServerError))
+		return
+	}
+
+	currentAuthTokenString, err := utils.GetBearerTokenFromContext(c)
+	if err != nil {
+		c.IndentedJSON(http.StatusUnauthorized, models.ErrResponseForHttpStatus(http.StatusUnauthorized))
+		return
+	}
+
+	currentAuthToken, claims, _ := models.ValidateToken(currentAuthTokenString)
+
+	if currentAuthToken == nil {
+		log.Printf("err: %s", err.Error())
+		c.IndentedJSON(http.StatusUnauthorized, models.ErrResponseForHttpStatus(http.StatusUnauthorized))
+		return
+	}
+
+	userID, err := strconv.Atoi(claims.Subject)
+	if err != nil {
+		log.Printf("routes > auth.go > refreshAuthToken > invalid user ID %s\n", claims.Subject)
+		c.IndentedJSON(http.StatusUnauthorized, models.ErrResponseForHttpStatus(http.StatusUnauthorized))
+		return
+	}
+
+	repo := repositories.UserRepository{DBConn: env.DB}
+
+	refreshTokenStr, err := repo.GetRefreshToken(userID)
+	if err != nil {
+		log.Printf("routes > auth.go > refreshAuthToken > could not get refresh token")
+		c.IndentedJSON(http.StatusInternalServerError, models.ErrResponseForHttpStatus(http.StatusInternalServerError))
+		return
+	}
+
+	_, _, err = models.ValidateToken(refreshTokenStr)
+	if err != nil {
+		log.Printf("routes > auth.go > refreshAuthToken > invalid refresh token > reauthentication needed")
+		c.IndentedJSON(http.StatusUnauthorized, models.ErrResponseForHttpStatus(http.StatusUnauthorized))
+		return
+	}
+
+	newAuthTokenExpiration := time.Now().Add(time.Minute * 30)
+	newAuthToken, err := models.MintToken(userID, claims.UserRoles, newAuthTokenExpiration)
+	if err != nil {
+		log.Printf("routes > auth.go > refreshAuthToken > could not mint new token")
+		c.IndentedJSON(http.StatusInternalServerError, models.ErrResponseForHttpStatus(http.StatusInternalServerError))
+		return
+	}
+
+	authTokenDetails := models.ClientReadableToken{
+		ExpiresAt: newAuthTokenExpiration.Unix(),
+		UserRoles: claims.UserRoles,
+	}
+
+	c.IndentedJSON(http.StatusOK, loginresponse{
+		AuthToken:        newAuthToken,
 		AuthTokenDetails: authTokenDetails,
 	})
 }
